@@ -190,14 +190,12 @@ async function getGlobDiffSnapshot(
         const fileHash = await new Promise<string>((resolve, reject) => {
           const hash = crypto.createHash('md5')
 
-          hash.setEncoding('hex')
-
           fs.createReadStream(filePath)
             .on('error', reject)
             .pipe(hash)
             .on('error', reject)
             .on('finish', () => {
-              resolve(hash.read())
+              resolve(hash.digest('hex'))
             })
         })
 
