@@ -187,17 +187,12 @@ async function getGlobDiffSnapshot(
         }
       } else {
         // File is new or has been modified, compute the hash
-        const fileHash = await new Promise<string>((resolve, reject) => {
-          const hash = crypto.createHash('md5')
+        const fileBuffer = await fs.promises.readFile(filePath)
 
-          fs.createReadStream(filePath)
-            .on('error', reject)
-            .pipe(hash)
-            .on('error', reject)
-            .on('finish', () => {
-              resolve(hash.digest('hex'))
-            })
-        })
+        const fileHash = crypto
+          .createHash('md5')
+          .update(fileBuffer)
+          .digest('hex')
 
         snapshot[filePath] = {
           hash: fileHash,

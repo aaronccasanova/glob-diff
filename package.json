@@ -1,6 +1,6 @@
 {
   "name": "glob-diff",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "description": "Utility to detect file changes matching a glob pattern",
   "author": "Aaron Casanova <aaronccasanova@gmail.com>",
   "license": "MIT",
