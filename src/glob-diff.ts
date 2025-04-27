@@ -3,7 +3,6 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 import { globby } from 'globby'
-import { hashFile } from 'hasha'
 
 type GlobbyParameters = Parameters<typeof globby>
 type GlobbyOptions = NonNullable<GlobbyParameters[1]>
@@ -188,7 +187,19 @@ async function getGlobDiffSnapshot(
         }
       } else {
         // File is new or has been modified, compute the hash
-        const fileHash = await hashFile(filePath, { algorithm: 'md5' })
+        const fileHash = await new Promise<string>((resolve, reject) => {
+          const hash = crypto.createHash('md5')
+
+          hash.setEncoding('hex')
+
+          fs.createReadStream(filePath)
+            .on('error', reject)
+            .pipe(hash)
+            .on('error', reject)
+            .on('finish', () => {
+              resolve(hash.read())
+            })
+        })
 
         snapshot[filePath] = {
           hash: fileHash,
