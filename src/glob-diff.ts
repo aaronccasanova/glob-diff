@@ -188,7 +188,7 @@ async function getGlobDiffSnapshot(
         }
       } else {
         // File is new or has been modified, compute the hash
-        const fileHash = await hashFile(filePath)
+        const fileHash = await hashFile(filePath, { algorithm: 'md5' })
 
         snapshot[filePath] = {
           hash: fileHash,
