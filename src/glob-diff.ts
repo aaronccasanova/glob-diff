@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 import { globby } from 'globby'
+import pLimit from 'p-limit'
 
 type GlobbyParameters = Parameters<typeof globby>
 type GlobbyOptions = NonNullable<GlobbyParameters[1]>
@@ -33,6 +34,11 @@ interface GlobDiffOptions {
    * @default false
    */
   alwaysHash?: boolean
+  /**
+   * The maximum number of concurrent file reads.
+   * @default 50
+   */
+  concurrency?: number
   /**
    * The current working directory in which to search.
    * Defaults to `process.cwd()`.
@@ -118,6 +124,7 @@ export async function globDiff(
     files: options.files,
     patterns: options.patterns,
     snapshot: previousSnapshot,
+    concurrency: options.concurrency,
   })
 
   const changes = getGlobDiffChanges(previousSnapshot, snapshot)
@@ -138,6 +145,10 @@ interface GetGlobDiffSnapshotOptions {
    * @default false
    */
   alwaysHash?: boolean
+  /**
+   * The maximum number of concurrent file reads
+   */
+  concurrency?: number
   /**
    * The current working directory in which to search.
    * Defaults to `process.cwd()`.
@@ -171,35 +182,39 @@ async function getGlobDiffSnapshot(
   const snapshot: GlobDiffSnapshot = {}
   const previousSnapshot = options.snapshot || {}
 
+  const limit = pLimit(options.concurrency ?? 50)
+
   await Promise.all(
-    filePaths.map(async (filePath) => {
-      const fileStats = await fs.promises.stat(filePath)
+    filePaths.map((filePath) =>
+      limit(async () => {
+        const fileStats = await fs.promises.stat(filePath)
 
-      // Check if file exists in previous snapshot and has the same modification time
-      if (
-        !options.alwaysHash &&
-        previousSnapshot[filePath]?.mtimeMs === fileStats.mtimeMs
-      ) {
-        // Reuse the previous hash if timestamp hasn't changed
-        snapshot[filePath] = {
-          hash: previousSnapshot[filePath].hash,
-          mtimeMs: fileStats.mtimeMs,
+        // Check if file exists in previous snapshot and has the same modification time
+        if (
+          !options.alwaysHash &&
+          previousSnapshot[filePath]?.mtimeMs === fileStats.mtimeMs
+        ) {
+          // Reuse the previous hash if timestamp hasn't changed
+          snapshot[filePath] = {
+            hash: previousSnapshot[filePath].hash,
+            mtimeMs: fileStats.mtimeMs,
+          }
+        } else {
+          // File is new or has been modified, compute the hash
+          const fileBuffer = await fs.promises.readFile(filePath)
+
+          const fileHash = crypto
+            .createHash('sha256')
+            .update(fileBuffer)
+            .digest('hex')
+
+          snapshot[filePath] = {
+            hash: fileHash,
+            mtimeMs: fileStats.mtimeMs,
+          }
         }
-      } else {
-        // File is new or has been modified, compute the hash
-        const fileBuffer = await fs.promises.readFile(filePath)
-
-        const fileHash = crypto
-          .createHash('md5')
-          .update(fileBuffer)
-          .digest('hex')
-
-        snapshot[filePath] = {
-          hash: fileHash,
-          mtimeMs: fileStats.mtimeMs,
-        }
-      }
-    }),
+      }),
+    ),
   )
 
   return snapshot
